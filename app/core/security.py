@@ -9,8 +9,10 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+def create_token(
+    subject: Union[str, Any],
+    token_type: str,
+    expires_delta: timedelta = None
 ) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -18,11 +20,29 @@ def create_access_token(
         expire = datetime.utcnow() + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {
+        "exp": expire,
+        "sub": str(subject),
+        "type": token_type
+    }
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm="HS256"
     )
     return encoded_jwt
+
+
+def create_access_token(
+    subject: Union[str, Any], expires_delta: timedelta = None
+) -> str:
+    return create_token(subject, "access", expires_delta)
+
+
+def create_refresh_token(
+    subject: Union[str, Any], expires_delta: timedelta = None
+) -> str:
+    if expires_delta is None:
+        expires_delta = timedelta(days=30)  # Refresh token válido por 30 dias
+    return create_token(subject, "refresh", expires_delta)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

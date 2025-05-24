@@ -10,6 +10,7 @@ from app.db.base import Base
 
 # Importar todos os modelos aqui
 from app.models.user import User  # noqa
+from app.models.client import Client  # noqa
 
 config = context.config
 

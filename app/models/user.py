@@ -12,4 +12,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
     is_active = Column(Boolean(), default=True)
-    is_superuser = Column(Boolean(), default=False) 
+    is_superuser = Column(Boolean(), default=False)
+    
+    tokens = relationship("Token", back_populates="user", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan") 

@@ -12,6 +12,7 @@ from app.db.base import get_db
 from app.schemas.token import Token, TokenPayload
 from app.schemas.user import UserCreate, User
 from app.services import auth as auth_service
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -22,7 +23,7 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
-    Autenticação OAuth2 compatível, retorna access token e refresh token
+    Obtém um token de acesso para autenticação.
     """
     user = auth_service.authenticate(
         db, email=form_data.username, password=form_data.password
@@ -33,18 +34,23 @@ def login(
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    elif not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuário inativo"
+        )
     
+    # Cria o token com expiração de 30 minutos
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    db_token = auth_service.create_user_token(
+        db=db,
+        user=user,
+        expires_delta=access_token_expires
+    )
     
     return {
-        "access_token": create_access_token(
-            user.id, expires_delta=access_token_expires
-        ),
-        "refresh_token": create_refresh_token(
-            user.id, expires_delta=refresh_token_expires
-        ),
-        "token_type": "bearer",
+        "access_token": db_token.token,
+        "token_type": "bearer"
     }
 
 
@@ -110,4 +116,16 @@ def register(
             detail="O email já está registrado.",
         )
     user = auth_service.create_user(db, obj_in=user_in)
-    return user 
+    return user
+
+
+@router.post("/logout")
+def logout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Desativa o token atual do usuário.
+    """
+    auth_service.deactivate_user_tokens(db, current_user.id)
+    return {"message": "Logout realizado com sucesso"} 

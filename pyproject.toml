@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "app-estilo"
 version = "0.1.0"
-description = "API RESTful para Lu Estilo"
+description = "API RESTful para Estilo"
 authors = ["Desenvolvedor <dev@example.com>"]
 packages = [
     { include = "app" }
@@ -20,6 +20,7 @@ psycopg2-binary = "^2.9.10"
 pydantic = "^2.6.4"
 pydantic-settings = "^2.2.1"
 email-validator = "^2.1.0.post1"
+pytest-cov = "^6.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

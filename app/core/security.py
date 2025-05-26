@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any, Union, Optional
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -12,9 +12,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_token(
     subject: Union[str, Any],
     token_type: str,
-    expires_delta: timedelta = None
+    expires_delta: Optional[timedelta] = None
 ) -> str:
     if expires_delta:
+        if isinstance(expires_delta, int):
+            expires_delta = timedelta(minutes=expires_delta)
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(
@@ -26,19 +28,19 @@ def create_token(
         "type": token_type
     }
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm="HS256"
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
     return encoded_jwt
 
 
 def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
     return create_token(subject, "access", expires_delta)
 
 
 def create_refresh_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
     if expires_delta is None:
         expires_delta = timedelta(days=30)  # Refresh token válido por 30 dias

@@ -135,7 +135,7 @@ def update_order(
     
     order = order_service.update_order(
         db=db,
-        db_obj=order,
+        order_id=order_id,
         obj_in=order_in
     )
     return order

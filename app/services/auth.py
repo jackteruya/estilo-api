@@ -24,10 +24,12 @@ def get_user(db: Session, user_id: int) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
-def authenticate(db: Session, email: str, password: str) -> User | bool:
+def authenticate(db: Session, email: str, password: str) -> User | str | bool:
     user = db.query(User).filter(User.email == email).first()
     if not user:
         return False
+    if not user.is_active:
+        return "inactive"
     if not verify_password(password, user.hashed_password):
         return False
     return user
@@ -39,6 +41,7 @@ def create_user(db: Session, *, obj_in: UserCreate) -> User:
         hashed_password=get_password_hash(obj_in.password),
         full_name=obj_in.full_name,
         is_superuser=obj_in.is_superuser,
+        is_active=obj_in.is_active if obj_in.is_active is not None else True
     )
     db.add(db_obj)
     db.commit()
@@ -153,14 +156,15 @@ def get_current_user(db: Session, token: str) -> User:
     return user
 
 
-def get_current_active_user(db: Session, token: str) -> User:
-    user = get_current_user(db, token)
-    if not user.is_active:
+def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=400,
             detail="Usuário inativo"
         )
-    return user
+    return current_user
 
 
 def get_current_active_superuser(db: Session, token: str) -> User:
@@ -170,4 +174,37 @@ def get_current_active_superuser(db: Session, token: str) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permissão negada"
         )
-    return user 
+    return user
+
+
+def validate_token(token: str) -> bool:
+    """
+    Valida um token JWT.
+    Retorna True se o token for válido, False caso contrário.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        return True
+    except jwt.JWTError:
+        return False
+
+
+def logout(db: Session, token: str) -> bool:
+    """
+    Realiza o logout do usuário invalidando o token.
+    Retorna True se o logout foi bem sucedido, False caso contrário.
+    """
+    try:
+        # Verifica se o token é válido
+        if not validate_token(token):
+            return False
+            
+        # Desativa o token no banco de dados
+        deactivate_token(db, token)
+        return True
+    except Exception:
+        return False 

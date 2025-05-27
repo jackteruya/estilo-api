@@ -18,7 +18,8 @@ def read_products(
     current_user: User = Depends(get_current_user),
     page: int = Query(1, ge=1, description="Número da página"),
     size: int = Query(10, ge=1, le=100, description="Quantidade de itens por página"),
-    search: str = Query(None, min_length=1, description="Termo de busca (nome ou descrição)")
+    search: str = Query(None, min_length=1, description="Termo de busca (nome ou descrição)"),
+    category: str = Query(None, description="Categoria do produto")
 ) -> Any:
     """
     Listar produtos com suporte a paginação e busca por nome/descrição.
@@ -26,12 +27,14 @@ def read_products(
     - **page**: Número da página (começa em 1)
     - **size**: Quantidade de itens por página (máximo 100)
     - **search**: Termo de busca para filtrar por nome ou descrição
+    - **category**: Categoria do produto
     """
     products, total = product_service.get_products(
         db=db,
         page=page,
         size=size,
-        search=search
+        search=search,
+        category=category
     )
     
     # Calcula o total de páginas
@@ -72,6 +75,11 @@ def create_product(
     """
     Criar novo produto.
     """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada"
+        )
     product = product_service.create_product(db=db, obj_in=product_in)
     return product
 
@@ -104,6 +112,12 @@ def update_product(
     """
     Atualizar informações de um produto específico.
     """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada"
+        )
+    
     product = product_service.get_product(db, product_id=product_id)
     if not product:
         raise HTTPException(
@@ -113,7 +127,7 @@ def update_product(
     
     product = product_service.update_product(
         db=db,
-        db_obj=product,
+        product_id=product_id,
         obj_in=product_in
     )
     return product
@@ -128,6 +142,12 @@ def delete_product(
     """
     Excluir um produto.
     """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada"
+        )
+    
     product = product_service.get_product(db, product_id=product_id)
     if not product:
         raise HTTPException(

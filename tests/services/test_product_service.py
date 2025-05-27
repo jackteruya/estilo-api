@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.services.product import (
     create_product,
@@ -46,8 +47,8 @@ def test_get_product_not_found(db: Session):
     assert product is None
 
 def test_get_products(db: Session, test_product: Product):
-    products = get_products(db)
-    assert len(products) >= 1
+    products, total = get_products(db)
+    assert total >= 1
     assert any(p.id == test_product.id for p in products)
 
 def test_get_products_with_search(db: Session):
@@ -61,8 +62,8 @@ def test_get_products_with_search(db: Session):
     )
     create_product(db, product_data)
     
-    products = get_products(db, search="Search")
-    assert len(products) >= 1
+    products, total = get_products(db, search="Search")
+    assert total >= 1
     assert all("Search" in p.name for p in products)
 
 def test_get_products_with_category(db: Session):
@@ -76,8 +77,8 @@ def test_get_products_with_category(db: Session):
     )
     create_product(db, product_data)
     
-    products = get_products(db, category="test_category")
-    assert len(products) >= 1
+    products, total = get_products(db, category="test_category")
+    assert total >= 1
     assert all(p.category == "test_category" for p in products)
 
 def test_update_product(db: Session, test_product: Product):
@@ -97,15 +98,24 @@ def test_update_product(db: Session, test_product: Product):
     assert updated_product.category == test_product.category  # Não foi alterado
 
 def test_update_product_not_found(db: Session):
+    """Testa a atualização de um produto que não existe."""
     update_data = ProductUpdate(
-        name="Updated Product"
+        name="Produto Atualizado",
+        description="Descrição atualizada",
+        price=29.99,
+        stock=50,
+        category="test_category",
+        is_active=True
     )
     
-    updated_product = update_product(db, 999, update_data)
-    assert updated_product is None
+    with pytest.raises(HTTPException) as exc_info:
+        update_product(db, 999, update_data)
+    
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Produto não encontrado."
 
 def test_delete_product(db: Session, test_product: Product):
-    deleted_product = delete_product(db, test_product.id)
+    deleted_product = delete_product(db=db, product_id=test_product.id)
     assert deleted_product is not None
     assert deleted_product.id == test_product.id
     
@@ -114,5 +124,7 @@ def test_delete_product(db: Session, test_product: Product):
     assert product is None
 
 def test_delete_product_not_found(db: Session):
-    deleted_product = delete_product(db, 999)
-    assert deleted_product is None 
+    with pytest.raises(HTTPException) as exc_info:
+        delete_product(db=db, product_id=999)
+    assert exc_info.value.status_code == 404
+    assert "Produto não encontrado" in exc_info.value.detail 

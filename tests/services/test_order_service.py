@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models.order import Order, OrderStatus
+from app.models.product import Product as ProductModel
 from app.schemas.order import OrderCreate, OrderItemCreate, OrderUpdate
 from app.schemas.product import Product
 from app.schemas.user import User
@@ -81,6 +82,10 @@ def test_get_order(db: Session, test_user: User, test_product: Product):
     assert order.total_amount == test_product.price
 
 def test_get_orders(db: Session, test_user: User, test_product: Product):
+    # Limpa os pedidos existentes
+    db.query(Order).delete()
+    db.commit()
+    
     # Cria dois pedidos
     order_in = OrderCreate(
         items=[
@@ -136,10 +141,11 @@ def test_update_order(db: Session, test_user: User, test_product: Product):
     update_data = OrderUpdate(status=OrderStatus.CONFIRMED)
     updated_order = order_service.update_order(
         db=db,
-        db_obj=created_order,
+        order_id=created_order.id,
         obj_in=update_data
     )
     
+    assert updated_order is not None
     assert updated_order.status == OrderStatus.CONFIRMED
 
 def test_delete_order(db: Session, test_user: User, test_product: Product):
@@ -173,5 +179,5 @@ def test_delete_order(db: Session, test_user: User, test_product: Product):
     assert order is None
     
     # Verifica se o estoque foi restaurado
-    product = db.query(Product).filter(Product.id == test_product.id).first()
+    product = db.query(ProductModel).filter(ProductModel.id == test_product.id).first()
     assert product.stock == test_product.stock 

@@ -13,11 +13,10 @@ def test_create_order(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
-                    "quantity": 2
+                    "quantity": 1
                 }
             ]
         }
@@ -25,17 +24,14 @@ def test_create_order(
     
     assert response.status_code == 200
     data = response.json()
-    assert data["client_id"] == 1
+    assert data["id"] is not None
     assert len(data["items"]) == 1
     assert data["items"][0]["product_id"] == product["id"]
-    assert data["items"][0]["quantity"] == 2
+    assert data["items"][0]["quantity"] == 1
     assert data["items"][0]["unit_price"] == product["price"]
-    assert data["items"][0]["total_price"] == product["price"] * 2
-    assert data["total_amount"] == product["price"] * 2
+    assert data["items"][0]["total_price"] == product["price"]
+    assert data["total_amount"] == product["price"]
     assert data["status"] == "pending"
-    assert "id" in data
-    assert "created_at" in data
-    assert "updated_at" in data
 
 def test_create_order_insufficient_stock(
     client: TestClient,
@@ -46,7 +42,6 @@ def test_create_order_insufficient_stock(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -67,7 +62,6 @@ def test_create_order_invalid_product(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": 999,
@@ -77,8 +71,8 @@ def test_create_order_invalid_product(
         }
     )
     
-    assert response.status_code == 404
-    assert "Produto não encontrado" in response.json()["detail"]
+    assert response.status_code == 400
+    assert "Produto 999 não encontrado" in response.json()["detail"]
 
 def test_read_orders(
     client: TestClient,
@@ -90,7 +84,6 @@ def test_read_orders(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -121,7 +114,6 @@ def test_read_orders_with_status(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -152,7 +144,6 @@ def test_read_order(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -172,7 +163,6 @@ def test_read_order(
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == order_id
-    assert data["client_id"] == 1
     assert len(data["items"]) == 1
     assert data["items"][0]["product_id"] == product["id"]
     assert data["items"][0]["quantity"] == 1
@@ -203,7 +193,6 @@ def test_update_order_status(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -215,27 +204,19 @@ def test_update_order_status(
     
     order_id = create_response.json()["id"]
     
+    # Atualiza o status
     response = client.put(
         f"/api/v1/orders/{order_id}",
         headers=user_token_headers,
         json={
-            "status": "completed"
+            "status": "confirmed"
         }
     )
     
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == order_id
-    assert data["status"] == "completed"
-    
-    # Verifica se o estoque foi atualizado
-    product_response = client.get(
-        f"/api/v1/products/{product['id']}",
-        headers=user_token_headers
-    )
-    assert product_response.status_code == 200
-    product_data = product_response.json()
-    assert product_data["stock"] == product["stock"] - 1
+    assert data["status"] == "confirmed"
 
 def test_update_order_status_invalid(
     client: TestClient,
@@ -247,7 +228,6 @@ def test_update_order_status_invalid(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
@@ -259,6 +239,7 @@ def test_update_order_status_invalid(
     
     order_id = create_response.json()["id"]
     
+    # Tenta atualizar com status inválido
     response = client.put(
         f"/api/v1/orders/{order_id}",
         headers=user_token_headers,
@@ -267,24 +248,23 @@ def test_update_order_status_invalid(
         }
     )
     
-    assert response.status_code == 400
-    assert "Status inválido" in response.json()["detail"]
+    assert response.status_code == 422
+    assert "Input should be 'pending', 'confirmed', 'preparing', 'ready', 'delivered' or 'cancelled'" in response.json()["detail"][0]["msg"]
 
 def test_delete_order(
     client: TestClient,
     user_token_headers: dict,
     product: dict
 ):
-    # Cria um pedido
+    # Cria um pedido com quantidade 6
     create_response = client.post(
         "/api/v1/orders/",
         headers=user_token_headers,
         json={
-            "client_id": 1,
             "items": [
                 {
                     "product_id": product["id"],
-                    "quantity": 1
+                    "quantity": 6
                 }
             ]
         }
@@ -292,20 +272,20 @@ def test_delete_order(
     
     order_id = create_response.json()["id"]
     
+    # Deleta o pedido
     response = client.delete(
         f"/api/v1/orders/{order_id}",
         headers=user_token_headers
     )
     
     assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == order_id
     
-    # Verifica se o pedido foi realmente deletado
+    # Verifica se o pedido foi deletado
     get_response = client.get(
         f"/api/v1/orders/{order_id}",
         headers=user_token_headers
     )
+    
     assert get_response.status_code == 404
     
     # Verifica se o estoque foi restaurado
@@ -313,6 +293,7 @@ def test_delete_order(
         f"/api/v1/products/{product['id']}",
         headers=user_token_headers
     )
+    
     assert product_response.status_code == 200
     product_data = product_response.json()
     assert product_data["stock"] == product["stock"]

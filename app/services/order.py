@@ -1,9 +1,9 @@
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from fastapi import HTTPException
 
-from app.models.order import Order, OrderStatus
-from app.models.order_item import OrderItem
+from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.schemas.order import OrderCreate, OrderUpdate
 
@@ -85,9 +85,13 @@ def create_order(db: Session, *, user_id: int, obj_in: OrderCreate) -> Order:
 def update_order(
     db: Session,
     *,
-    db_obj: Order,
+    order_id: int,
     obj_in: OrderUpdate
-) -> Order:
+) -> Optional[Order]:
+    db_obj = db.query(Order).filter(Order.id == order_id).first()
+    if not db_obj:
+        return None
+        
     update_data = obj_in.model_dump(exclude_unset=True)
     
     for field in update_data:
@@ -106,6 +110,7 @@ def delete_order(db: Session, *, order_id: int) -> Optional[Order]:
             product = db.query(Product).filter(Product.id == item.product_id).first()
             if product:
                 product.stock += item.quantity
+                db.add(product)
         
         db.delete(order)
         db.commit()

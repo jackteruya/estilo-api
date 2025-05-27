@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from fastapi import HTTPException
 
 from app.models.client import Client
 from app.schemas.client import ClientCreate, ClientUpdate
@@ -48,18 +49,40 @@ def get_clients(
     return clients, total
 
 
-def create_client(db: Session, *, obj_in: ClientCreate) -> Client:
-    db_obj = Client(
-        name=obj_in.name,
-        email=obj_in.email,
-        phone=obj_in.phone,
-        cpf=obj_in.cpf,
-        address=obj_in.address,
-    )
-    db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
+def create_client(db: Session, obj_in: ClientCreate) -> Client:
+    try:
+        # Verifica se já existe um cliente com o mesmo CPF
+        existing_client = db.query(Client).filter(Client.cpf == obj_in.cpf).first()
+        if existing_client:
+            raise HTTPException(
+                status_code=400,
+                detail="CPF já cadastrado"
+            )
+        
+        # Verifica se já existe um cliente com o mesmo email
+        existing_email = db.query(Client).filter(Client.email == obj_in.email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Email já cadastrado"
+            )
+        
+        db_obj = Client(
+            name=obj_in.name,
+            email=obj_in.email,
+            cpf=obj_in.cpf,
+            phone=obj_in.phone,
+            address=obj_in.address
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def update_client(

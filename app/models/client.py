@@ -1,5 +1,6 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 from app.db.base import Base
 
@@ -14,3 +15,5 @@ class Client(Base):
     cpf = Column(String, unique=True, index=True, nullable=False)
     address = Column(String)
     is_active = Column(Boolean(), default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -28,20 +28,35 @@ def login(
     user = auth_service.authenticate(
         db, email=form_data.username, password=form_data.password
     )
+    
+    # Verifica primeiro se o usuário está inativo
+    if user == "inactive":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário inativo",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Depois verifica se as credenciais são inválidas
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos",
+            detail="Credenciais inválidas",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    elif not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário inativo"
         )
     
     # Cria o token com expiração de 30 minutos
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    access_token = create_access_token(
+        user.id, expires_delta=access_token_expires
+    )
+    refresh_token = create_refresh_token(
+        user.id, expires_delta=refresh_token_expires
+    )
+    
+    # Persiste o token no banco de dados
     db_token = auth_service.create_user_token(
         db=db,
         user=user,
@@ -49,12 +64,13 @@ def login(
     )
     
     return {
-        "access_token": db_token.token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer"
     }
 
 
-@router.post("/refresh-token", response_model=Token)
+@router.post("/refresh", response_model=Token)
 def refresh_token(
     db: Session = Depends(get_db),
     refresh_token: str = Depends(auth_service.get_refresh_token)
@@ -64,7 +80,7 @@ def refresh_token(
     """
     try:
         payload = jwt.decode(
-            refresh_token, settings.SECRET_KEY, algorithms=["HS256"]
+            refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         token_data = TokenPayload(**payload)
         
@@ -84,13 +100,16 @@ def refresh_token(
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         
+        access_token = create_access_token(
+            user.id, expires_delta=access_token_expires
+        )
+        new_refresh_token = create_refresh_token(
+            user.id, expires_delta=refresh_token_expires
+        )
+        
         return {
-            "access_token": create_access_token(
-                user.id, expires_delta=access_token_expires
-            ),
-            "refresh_token": create_refresh_token(
-                user.id, expires_delta=refresh_token_expires
-            ),
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
             "token_type": "bearer",
         }
     except JWTError:
@@ -113,7 +132,7 @@ def register(
     if user:
         raise HTTPException(
             status_code=400,
-            detail="O email já está registrado.",
+            detail="Email já registrado",
         )
     user = auth_service.create_user(db, obj_in=user_in)
     return user
@@ -128,4 +147,12 @@ def logout(
     Desativa o token atual do usuário.
     """
     auth_service.deactivate_user_tokens(db, current_user.id)
-    return {"message": "Logout realizado com sucesso"} 
+    return {"message": "Logout realizado com sucesso"}
+
+
+@router.get("/me", response_model=User)
+def read_me(current_user: User = Depends(get_current_user)):
+    """
+    Retorna os dados do usuário autenticado.
+    """
+    return current_user 

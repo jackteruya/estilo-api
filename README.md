@@ -1,4 +1,4 @@
-# Lu Estilo API
+# Estilo API
 
 API RESTful desenvolvida para a Lu Estilo, uma empresa de confecção, utilizando FastAPI.
 
